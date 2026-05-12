@@ -1,4 +1,4 @@
-name: Docker Hub CD Pipeline
+name: AWS ECR CD Pipeline
 
 on:
   push:
@@ -13,19 +13,24 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build Docker Image
-        run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/react-app:latest .
+        run: docker build -t react-app .
+
+      - name: Tag Docker Image
+        run: docker tag react-app:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/react-app:latest
 
       - name: Push Docker Image
-        run: |
-          docker push ${{ secrets.DOCKER_USERNAME }}/react-app:latest
+        run: docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/react-app:latest
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
@@ -33,14 +38,9 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-
           script: |
-            docker pull ${{ secrets.DOCKER_USERNAME }}/react-app:latest
-
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
+            docker pull 667198667497.dkr.ecr.us-east-1.amazonaws.com/react-app:latest
             docker stop react-app || true
             docker rm react-app || true
-
-            docker run -d \
-              -p 3000:3000 \
-              --name react-app \
-              ${{ secrets.DOCKER_USERNAME }}/react-app:latest
+            docker run -d -p 3000:3000 --name react-app 123456789012.dkr.ecr.us-east-1.amazonaws.com/react-app:latest
